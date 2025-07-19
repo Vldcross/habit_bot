@@ -29,8 +29,12 @@ def save_data(data):
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 data = load_data()
-yes_no_keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-yes_no_keyboard.add(KeyboardButton("Да"), KeyboardButton("Нет"))
+yes_no_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Да"), KeyboardButton(text="Нет")]
+    ],
+    resize_keyboard=True
+)
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
