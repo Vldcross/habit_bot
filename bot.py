@@ -1,12 +1,12 @@
 import json
 import logging
 import os
+import asyncio
 from datetime import datetime
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import Command
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import asyncio
 
 API_TOKEN = "8015596815:AAEiisUZoMvVLoQ9r6ciC3KSwWwgrbv1EJE"
 DATA_FILE = "data.json"
@@ -29,6 +29,7 @@ def save_data(data):
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 data = load_data()
+
 yes_no_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="Да"), KeyboardButton(text="Нет")]
