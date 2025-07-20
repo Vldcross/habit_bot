@@ -15,7 +15,6 @@ DAILY_HOUR = 21  # 21:00 по МСК
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
-
 scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
 
 def load_data():
@@ -31,11 +30,21 @@ def save_data(data):
 data = load_data()
 
 yes_no_keyboard = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text="Да"), KeyboardButton(text="Нет")]],
+    resize_keyboard=True
+)
+
+settings_keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="Да"), KeyboardButton(text="Нет")]
+        [KeyboardButton(text="🎯 Изменить цель"), KeyboardButton(text="💰 Изменить сумму")],
+        [KeyboardButton(text="⏰ Изменить время"), KeyboardButton(text="📅 Изменить дни")],
+        [KeyboardButton(text="⚙️ Сбросить цель")]
     ],
     resize_keyboard=True
 )
+
+# Временное состояние для редактирования параметров
+awaiting_action = {}
 
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
@@ -47,49 +56,98 @@ async def start_command(message: types.Message):
             "goal": None,
             "goal_days": 0,
             "current_day": 0,
-            "saved_amount": 0
+            "saved_amount": 0,
+            "reminder_hour": DAILY_HOUR
         }
         save_data(data)
         await message.answer("Привет! От какой привычки хочешь избавиться?")
     else:
-        await message.answer("Привет снова! Я уже всё помню 😉")
+        await message.answer("Привет снова! Используй /settings, чтобы изменить данные.")
 
-@dp.message(F.text, lambda m: str(m.from_user.id) in data and data[str(m.from_user.id)]["habit"] is None)
-async def set_habit(message: types.Message):
+@dp.message(Command("settings"))
+async def show_settings(message: types.Message):
+    await message.answer("Выбери, что хочешь изменить:", reply_markup=settings_keyboard)
+
+# --- Настройки ---
+@dp.message(F.text == "🎯 Изменить цель")
+async def change_goal(message: types.Message):
+    awaiting_action[message.from_user.id] = "goal"
+    await message.answer("Введи новую цель:")
+
+@dp.message(F.text == "💰 Изменить сумму")
+async def change_amount(message: types.Message):
+    awaiting_action[message.from_user.id] = "amount"
+    await message.answer("Введи новую сумму (руб/день):")
+
+@dp.message(F.text == "⏰ Изменить время")
+async def change_time(message: types.Message):
+    awaiting_action[message.from_user.id] = "time"
+    await message.answer("Введи новый час напоминания (0-23):")
+
+@dp.message(F.text == "📅 Изменить дни")
+async def change_days(message: types.Message):
+    awaiting_action[message.from_user.id] = "days"
+    await message.answer("Введи новое количество дней:")
+
+@dp.message(F.text == "⚙️ Сбросить цель")
+async def reset_goal(message: types.Message):
     user_id = str(message.from_user.id)
-    data[user_id]["habit"] = message.text
+    data[user_id] = {
+        "habit": None,
+        "daily_amount": 0,
+        "goal": None,
+        "goal_days": 0,
+        "current_day": 0,
+        "saved_amount": 0,
+        "reminder_hour": DAILY_HOUR
+    }
     save_data(data)
-    await message.answer(f"Отлично! Сколько рублей ты готов откладывать каждый день, если победишь привычку '{message.text}'?")
+    await message.answer("Все данные сброшены. Введи новую привычку.", reply_markup=types.ReplyKeyboardRemove())
 
-@dp.message(F.text, lambda m: str(m.from_user.id) in data and data[str(m.from_user.id)]["daily_amount"] == 0 and data[str(m.from_user.id)]["habit"] is not None)
-async def set_amount(message: types.Message):
+# --- Обработчик ввода новых данных ---
+@dp.message(F.text)
+async def process_input(message: types.Message):
     user_id = str(message.from_user.id)
-    try:
-        amount = int(message.text)
-        data[user_id]["daily_amount"] = amount
+    if user_id not in data:
+        await message.answer("Сначала введи данные через /start")
+        return
+
+    action = awaiting_action.get(message.from_user.id)
+    if action == "goal":
+        data[user_id]["goal"] = message.text
         save_data(data)
-        await message.answer("Супер! А теперь напиши свою цель (например, PlayStation 5).")
-    except:
-        await message.answer("Пожалуйста, введи число.")
+        awaiting_action.pop(message.from_user.id)
+        await message.answer(f"Новая цель: {message.text}", reply_markup=settings_keyboard)
+    elif action == "amount":
+        try:
+            data[user_id]["daily_amount"] = int(message.text)
+            save_data(data)
+            awaiting_action.pop(message.from_user.id)
+            await message.answer(f"Новая сумма: {message.text}₽", reply_markup=settings_keyboard)
+        except ValueError:
+            await message.answer("Введите число.")
+    elif action == "time":
+        try:
+            new_hour = int(message.text)
+            if 0 <= new_hour <= 23:
+                data[user_id]["reminder_hour"] = new_hour
+                save_data(data)
+                awaiting_action.pop(message.from_user.id)
+                await message.answer(f"Новое время напоминания: {new_hour}:00", reply_markup=settings_keyboard)
+            else:
+                await message.answer("Час должен быть от 0 до 23.")
+        except ValueError:
+            await message.answer("Введите число.")
+    elif action == "days":
+        try:
+            data[user_id]["goal_days"] = int(message.text)
+            save_data(data)
+            awaiting_action.pop(message.from_user.id)
+            await message.answer(f"Новое количество дней: {message.text}", reply_markup=settings_keyboard)
+        except ValueError:
+            await message.answer("Введите число.")
 
-@dp.message(F.text, lambda m: str(m.from_user.id) in data and data[str(m.from_user.id)]["goal"] is None and data[str(m.from_user.id)]["daily_amount"] > 0)
-async def set_goal(message: types.Message):
-    user_id = str(message.from_user.id)
-    data[user_id]["goal"] = message.text
-    save_data(data)
-    await message.answer("Сколько дней ты хочешь работать над этой целью?")
-
-@dp.message(F.text, lambda m: str(m.from_user.id) in data and data[str(m.from_user.id)]["goal_days"] == 0 and data[str(m.from_user.id)]["goal"] is not None)
-async def set_goal_days(message: types.Message):
-    user_id = str(message.from_user.id)
-    try:
-        days = int(message.text)
-        data[user_id]["goal_days"] = days
-        save_data(data)
-        await message.answer(f"Отлично! Каждый день в 21:00 я буду спрашивать, победил ли ты привычку '{data[user_id]['habit']}'. Готов?", reply_markup=yes_no_keyboard)
-    except:
-        await message.answer("Пожалуйста, введи число.")
-
+# --- Ежедневные ответы ---
 @dp.message(F.text.in_(["Да", "Нет"]))
 async def daily_check(message: types.Message):
     user_id = str(message.from_user.id)
@@ -101,23 +159,26 @@ async def daily_check(message: types.Message):
         data[user_id]["current_day"] += 1
         data[user_id]["saved_amount"] += data[user_id]["daily_amount"]
         save_data(data)
-        await message.answer(f"Ты красавчик! 💪 Ты уже ближе к своей цели: {data[user_id]['goal']}, "
-                             f"ты продержался {data[user_id]['current_day']}/{data[user_id]['goal_days']} дней, "
-                             f"и накопил аж целых {data[user_id]['saved_amount']}₽.")
+        await message.answer(f"Ты красавчик! 💪 Ты ближе к цели: {data[user_id]['goal']}, "
+                             f"{data[user_id]['current_day']}/{data[user_id]['goal_days']} дней, "
+                             f"накопил {data[user_id]['saved_amount']}₽.")
     else:
-        await message.answer(f"Очень жаль, котичка. 😿 Завтра будет новый шанс! "
-                             f"Сейчас {data[user_id]['current_day']}/{data[user_id]['goal_days']} дней, "
+        await message.answer(f"Очень жаль 😿 Завтра новый шанс! "
+                             f"{data[user_id]['current_day']}/{data[user_id]['goal_days']} дней, "
                              f"в копилке {data[user_id]['saved_amount']}₽.")
 
+# --- Напоминание ---
 async def send_daily_reminder():
     for user_id in data.keys():
         try:
-            await bot.send_message(user_id, f"Ты сегодня победил свою привычку — {data[user_id]['habit']}?", reply_markup=yes_no_keyboard)
+            hour = data[user_id].get("reminder_hour", DAILY_HOUR)
+            if datetime.now().hour == hour:
+                await bot.send_message(user_id, f"Ты сегодня победил привычку — {data[user_id]['habit']}?", reply_markup=yes_no_keyboard)
         except Exception as e:
             logging.warning(f"Не смог отправить сообщение пользователю {user_id}: {e}")
 
 async def main():
-    scheduler.add_job(send_daily_reminder, "cron", hour=DAILY_HOUR, minute=0)
+    scheduler.add_job(send_daily_reminder, "cron", minute=0)
     scheduler.start()
     await dp.start_polling(bot)
 
