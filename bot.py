@@ -31,8 +31,10 @@ def load_data():
 
 def save_data():
     try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
+        temp_file = DATA_FILE + ".tmp"
+        with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(users_data, f, ensure_ascii=False, indent=4)
+        os.replace(temp_file, DATA_FILE)
     except Exception as e:
         logging.error(f"Ошибка при сохранении данных: {e}")
 
@@ -228,11 +230,10 @@ async def daily_check(message: types.Message):
     goal = user.get("goal")
     today = str(date.today())
 
-    if not goal:
+    if not goal or not all(k in goal for k in ['progress', 'saved', 'amount']):
         await message.answer("Сначала создай цель через /start.")
         return
 
-    # Защита от повторного ответа за день
     if user.get("last_check_date") == today:
         await message.answer("Сегодня ты уже ответил!")
         return
@@ -269,7 +270,7 @@ async def send_reminders():
 
 # ---------------------- Main ----------------------
 async def main():
-    scheduler.add_job(send_reminders, "cron", minute="0")
+    scheduler.add_job(send_reminders, "cron", minute=0)
     scheduler.start()
     await dp.start_polling(bot)
 
