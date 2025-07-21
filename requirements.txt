@@ -1,2 +1,3 @@
-aiogram
-apscheduler
+aiogram==3.2.0
+aiohttp==3.9.1
+apscheduler==3.10.4
