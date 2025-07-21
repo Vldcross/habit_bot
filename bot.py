@@ -4,7 +4,7 @@ import os
 import random
 import aiohttp
 import asyncio
-from datetime import datetime
+from datetime import datetime, date
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
@@ -18,6 +18,7 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
 
+# ---------------------- Работа с данными ----------------------
 def load_data():
     if os.path.exists(DATA_FILE):
         try:
@@ -37,8 +38,8 @@ def save_data():
 
 users_data = load_data()
 user_steps = {}
-settings_steps = {}
 
+# ---------------------- Клавиатуры ----------------------
 yes_no_keyboard = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text="Да"), KeyboardButton(text="Нет")]],
     resize_keyboard=True
@@ -64,6 +65,7 @@ settings_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
+# ---------------------- Вспомогательные функции ----------------------
 async def get_random_cat():
     url = "https://api.thecatapi.com/v1/images/search"
     try:
@@ -80,7 +82,8 @@ def get_user(user_id):
     if user_id not in users_data:
         users_data[user_id] = {
             "goal": None,
-            "reminder_hour": 21
+            "reminder_hour": 21,
+            "last_check_date": ""
         }
         save_data()
     return users_data[user_id]
@@ -96,17 +99,11 @@ def format_progress(goal):
         f"Накоплено: {goal.get('saved', 0)}₽"
     )
 
-def check_achievements(goal):
-    if goal["progress"] == 7:
-        return "🎉 Круто! Ты уже 7 дней держишься! Так держать!"
-    elif goal["progress"] == 30:
-        return "👑 Вау! 30 дней — ты мастер своей привычки!"
-    return None
-
+# ---------------------- Команды ----------------------
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     user_id = str(message.from_user.id)
-    users_data[user_id] = {"goal": None, "reminder_hour": 21}
+    users_data[user_id] = {"goal": None, "reminder_hour": 21, "last_check_date": ""}
     save_data()
     intro_text = (
         "Привет! Я бот, который поможет тебе побеждать вредные привычки и копить деньги на свои мечты.
@@ -114,18 +111,16 @@ async def start_command(message: types.Message):
 "
         "Как я работаю:
 "
-        "1. Ты задаёшь привычку, от которой хочешь избавиться.
+        "1. Ты задаёшь привычку.
 "
         "2. Указываешь сумму, которую будешь откладывать за каждый день победы.
 "
-        "3. Я спрошу, достиг ли ты успеха сегодня, и если 'Да' — я добавлю сумму в твою копилку и пришлю котика 🐱.
-"
-        "4. Мы будем считать прогресс и накопленные деньги.
+        "3. Я каждый день спрошу, достиг ли ты успеха, и если 'Да', добавлю сумму в копилку и пришлю котика 🐱.
 
 "
         "Команды:
 "
-        "/start — начать или настроить цель.
+        "/start — начать или изменить цель.
 "
         "/settings — изменить цель или настройки.
 "
@@ -141,31 +136,30 @@ async def start_command(message: types.Message):
 @dp.message(Command("help"))
 async def help_command(message: types.Message):
     help_text = (
-        "Вот что я могу:
+        "Что я умею:
 "
         "/start — начать или изменить цель.
 "
         "/settings — изменить параметры.
 "
-        "/reset_all — сбросить все данные.
+        "/reset_all — сбросить данные.
 "
-        "/help — показать справку.
-"
-        "📊 Моя статистика — покажет текущий прогресс."
+        "📊 Моя статистика — прогресс по цели."
     )
     await message.answer(help_text)
 
 @dp.message(Command("reset_all"))
 async def reset_all_command(message: types.Message):
     user_id = str(message.from_user.id)
-    users_data[user_id] = {"goal": None, "reminder_hour": 21}
+    users_data[user_id] = {"goal": None, "reminder_hour": 21, "last_check_date": ""}
     save_data()
-    await message.answer("Все данные удалены. Можешь создать новую цель через /start.")
+    await message.answer("Все данные удалены. Создай новую цель через /start.")
 
 @dp.message(Command("settings"))
 async def settings_command(message: types.Message):
     await message.answer("Выбери, что хочешь изменить:", reply_markup=settings_keyboard)
 
+# ---------------------- Кнопки ----------------------
 @dp.message(F.text == "📊 Моя статистика")
 async def show_stats(message: types.Message):
     user = get_user(str(message.from_user.id))
@@ -179,6 +173,7 @@ async def show_stats(message: types.Message):
 async def no_changes(message: types.Message):
     await message.answer("Ок, ничего не меняем.", reply_markup=main_keyboard)
 
+# ---------------------- Онбординг ----------------------
 @dp.message(F.text)
 async def onboarding_handler(message: types.Message):
     user_id = str(message.from_user.id)
@@ -189,27 +184,27 @@ async def onboarding_handler(message: types.Message):
         if step == "habit":
             step_data["goal"]["habit"] = message.text
             step_data["step"] = "amount"
-            await message.answer("Сколько рублей ты готов откладывать каждый день?")
+            await message.answer("Сколько рублей откладывать каждый день?")
         elif step == "amount":
             try:
                 amount = int(message.text)
                 step_data["goal"]["amount"] = amount
                 step_data["step"] = "goal_name"
-                await message.answer(f"Ты готов откладывать {amount}₽ каждый день. Теперь напиши название своей цели.")
+                await message.answer(f"Будем откладывать {amount}₽. Теперь напиши название своей цели.")
             except ValueError:
-                await message.answer("Пожалуйста, введи сумму числом.")
+                await message.answer("Введи сумму числом.")
         elif step == "goal_name":
             step_data["goal"]["name"] = message.text
             step_data["step"] = "days"
-            await message.answer("Сколько дней ты хочешь держаться?")
+            await message.answer("Сколько дней хочешь держаться?")
         elif step == "days":
             try:
                 days = int(message.text)
                 step_data["goal"]["days"] = days
                 step_data["step"] = "future_message"
-                await message.answer("Напиши сообщение самому себе для будущего (когда достигнешь цели).")
+                await message.answer("Напиши сообщение самому себе в будущее.")
             except ValueError:
-                await message.answer("Пожалуйста, введи количество дней числом.")
+                await message.answer("Введи число.")
         elif step == "future_message":
             step_data["goal"]["future_message"] = message.text
             users_data[user_id]["goal"] = {
@@ -220,58 +215,61 @@ async def onboarding_handler(message: types.Message):
             save_data()
             await message.answer(
                 f"Отлично! Вот твоя цель:
-{format_progress(users_data[user_id]['goal'])}
-Мы начнём отслеживание с завтрашнего дня!",
+{format_progress(users_data[user_id]['goal'])}",
                 reply_markup=main_keyboard
             )
             user_steps.pop(user_id)
 
+# ---------------------- Проверка привычки ----------------------
 @dp.message(F.text.in_(["Да", "Нет"]))
 async def daily_check(message: types.Message):
     user_id = str(message.from_user.id)
     user = get_user(user_id)
     goal = user.get("goal")
-    if not goal or not isinstance(goal, dict) or not all(k in goal for k in ['progress', 'saved', 'amount']):
+    today = str(date.today())
+
+    if not goal:
         await message.answer("Сначала создай цель через /start.")
+        return
+
+    # Защита от повторного ответа за день
+    if user.get("last_check_date") == today:
+        await message.answer("Сегодня ты уже ответил!")
         return
 
     if message.text == "Да":
         goal["progress"] += 1
         goal["saved"] += goal["amount"]
+        user["last_check_date"] = today
         save_data()
 
         response = f"Отлично! {format_progress(goal)}"
-
-        achievement = check_achievements(goal)
-        if achievement:
-            response += f"\n\n{achievement}"
-
         await message.answer(response)
         cat_url = await get_random_cat()
         if cat_url:
-            await message.answer_photo(cat_url, caption="Твой котик за сегодняшний успех 🐱")
+            await message.answer_photo(cat_url, caption="Котик за твой успех 🐱")
 
         if goal["progress"] >= goal["days"]:
-            await message.answer(f"Поздравляю! Ты достиг цели: {goal['name']}!\n{goal['future_message']}")
+            await message.answer(f"Поздравляю! Цель {goal['name']} достигнута!
+{goal['future_message']}")
     else:
-        support_phrases = [
-            "Сегодня не вышло, но завтра новый день. Ты справишься!",
-            "Не переживай, главное — не останавливаться.",
-            "Ничего, завтра получится лучше!"
-        ]
-        await message.answer(random.choice(support_phrases))
+        user["last_check_date"] = today
+        save_data()
+        await message.answer("Сегодня не получилось, но завтра будет лучше!")
 
+# ---------------------- Напоминания ----------------------
 async def send_reminders():
-    now_hour = datetime.now().hour
+    now = datetime.now()
     for user_id, user_data in users_data.items():
         try:
-            if user_data.get("reminder_hour", 21) == now_hour:
+            if user_data.get("reminder_hour", 21) == now.hour and now.minute == 0:
                 await bot.send_message(user_id, "Сегодня ты победил привычку?", reply_markup=yes_no_keyboard)
         except Exception as e:
             logging.warning(f"Не удалось отправить сообщение {user_id}: {e}")
 
+# ---------------------- Main ----------------------
 async def main():
-    scheduler.add_job(send_reminders, "cron", hour=21, minute=0)
+    scheduler.add_job(send_reminders, "cron", minute="0")
     scheduler.start()
     await dp.start_polling(bot)
 
