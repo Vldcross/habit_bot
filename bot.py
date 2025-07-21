@@ -45,7 +45,6 @@ settings_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# Временное состояние
 awaiting_action = {}
 pending_changes = {}
 
@@ -83,20 +82,14 @@ async def show_stats(message: types.Message):
     current = data[user_id].get("current_day", 0)
     amount = data[user_id].get("saved_amount", 0)
     await message.answer(
-        f"📊 *Твоя статистика:*
-
-"
-        f"Привычка: {habit}
-"
-        f"Цель: {goal}
-"
-        f"Прогресс: {current}/{days} дней
-"
+        f"📊 *Твоя статистика:*\n\n"
+        f"Привычка: {habit}\n"
+        f"Цель: {goal}\n"
+        f"Прогресс: {current}/{days} дней\n"
         f"Накоплено: {amount}₽",
         parse_mode="Markdown"
     )
 
-# --- Настройки ---
 @dp.message(F.text == "🎯 Изменить цель")
 async def change_goal(message: types.Message):
     awaiting_action[message.from_user.id] = "goal"
@@ -139,7 +132,6 @@ async def cancel_edit(message: types.Message):
     pending_changes.pop(user_id, None)
     await message.answer("Изменения отменены. Возвращаюсь в меню настроек.", reply_markup=settings_keyboard)
 
-# --- Подтверждение изменений ---
 @dp.message(F.text.in_(["Да", "Нет"]))
 async def handle_yes_no(message: types.Message):
     user_id = message.from_user.id
@@ -155,7 +147,6 @@ async def handle_yes_no(message: types.Message):
             awaiting_action.pop(user_id, None)
             await message.answer("Изменения отменены.", reply_markup=settings_keyboard)
     else:
-        # Логика ежедневного ответа
         if user_id not in data or data[str(user_id)]["habit"] is None:
             await message.answer("Сначала введи свои данные через /start")
             return
@@ -171,7 +162,6 @@ async def handle_yes_no(message: types.Message):
                                  f"{data[str(user_id)]['current_day']}/{data[str(user_id)]['goal_days']} дней, "
                                  f"в копилке {data[str(user_id)]['saved_amount']}₽.")
 
-# --- Обработчик ввода новых данных ---
 @dp.message(F.text)
 async def process_input(message: types.Message):
     user_id = str(message.from_user.id)
@@ -203,7 +193,6 @@ async def process_input(message: types.Message):
         except ValueError:
             await message.answer("Введите число.")
 
-# --- Напоминание ---
 async def send_daily_reminder():
     for user_id in data.keys():
         try:
