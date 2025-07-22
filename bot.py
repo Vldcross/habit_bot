@@ -1,8 +1,8 @@
+
 import json
 import logging
 import os
 import random
-import aiohttp
 from datetime import datetime
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -19,7 +19,6 @@ dp = Dispatcher()
 scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
 
 
-# ----------------- Утилиты -----------------
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -28,8 +27,10 @@ def load_data():
 
 
 def save_data(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
+    temp_file = DATA_FILE + ".tmp"
+    with open(temp_file, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+    os.replace(temp_file, DATA_FILE)
 
 
 data = load_data()
@@ -44,7 +45,6 @@ main_keyboard = ReplyKeyboardMarkup(
 )
 
 
-# ----------------- Мемы -----------------
 async def send_cat_meme(chat_id):
     cat_memes = [
         "https://i.imgur.com/WxJ7d8C.jpeg",
@@ -55,20 +55,19 @@ async def send_cat_meme(chat_id):
     await bot.send_photo(chat_id, meme_url, caption="Молодец! Вот котик для настроения 🐱")
 
 
-# ----------------- Форматирование -----------------
 def format_progress(goal):
     return (
-        f"Цель: {goal.get('name', '-')}
-"
-        f"Сумма за день: {goal.get('amount', 0)} руб.
-"
-        f"Дней достигнуто: {goal.get('days_done', 0)}/{goal.get('total_days', 0)}
-"
-        f"Накоплено: {goal.get('saved', 0)} руб."
+        "Цель: {0}\nСумма за день: {1} руб.\nДней достигнуто: {2}/{3}\nНакоплено: {4} руб."
+        .format(
+            goal.get('name', '-'),
+            goal.get('amount', 0),
+            goal.get('days_done', 0),
+            goal.get('total_days', 0),
+            goal.get('saved', 0)
+        )
     )
 
 
-# ----------------- Хэндлеры -----------------
 @dp.message(Command("start"))
 async def start_command(message: types.Message):
     user_id = str(message.from_user.id)
@@ -83,28 +82,16 @@ async def start_command(message: types.Message):
         save_data(data)
 
     intro_text = (
-        "Привет! Я бот, который поможет тебе побеждать вредные привычки и копить деньги на свои мечты.
-
-"
-        "Как я работаю:
-"
-        "1. Ты задаёшь привычку.
-"
-        "2. Указываешь сумму, которую будешь откладывать за каждый день победы.
-"
-        "3. Каждый день я спрошу: 'Ты победил привычку сегодня?'
-"
-        "4. Если 'Да', я добавлю сумму в копилку и пришлю котика 🐱.
-
-"
-        "Команды:
-"
-        "/start — начать заново.
-"
-        "/settings — изменить цель или настройки.
-"
-        "/help — показать команды.
-"
+        "Привет! Я бот, который поможет тебе побеждать вредные привычки и копить деньги на свои мечты.\n\n"
+        "Как я работаю:\n"
+        "1. Ты задаёшь привычку.\n"
+        "2. Указываешь сумму, которую будешь откладывать за каждый день победы.\n"
+        "3. Каждый день я спрошу: 'Ты победил привычку сегодня?'\n"
+        "4. Если 'Да', я добавлю сумму в копилку и пришлю котика 🐱.\n\n"
+        "Команды:\n"
+        "/start — начать заново.\n"
+        "/settings — изменить цель или настройки.\n"
+        "/help — показать команды.\n"
         "/reset_all — сбросить все данные."
     )
 
@@ -114,14 +101,10 @@ async def start_command(message: types.Message):
 @dp.message(Command("help"))
 async def help_command(message: types.Message):
     help_text = (
-        "Доступные команды:
-"
-        "/start — перезапустить бота.
-"
-        "/settings — изменить цель, сумму, дни.
-"
-        "/reset_all — сбросить все данные.
-"
+        "Доступные команды:\n"
+        "/start — перезапустить бота.\n"
+        "/settings — изменить цель, сумму, дни.\n"
+        "/reset_all — сбросить все данные.\n"
         "Кнопки 'Да' и 'Нет' помогают отмечать прогресс."
     )
     await message.answer(help_text)
@@ -160,7 +143,6 @@ async def handle_message(message: types.Message):
         await message.answer("Я не понял команду. Используй кнопки или /help.")
 
 
-# ----------------- Напоминания -----------------
 async def send_daily_reminder():
     for user_id in data:
         try:
@@ -174,7 +156,6 @@ def schedule_jobs():
     scheduler.start()
 
 
-# ----------------- Старт -----------------
 async def main():
     schedule_jobs()
     await dp.start_polling(bot)
