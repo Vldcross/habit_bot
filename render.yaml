@@ -1,0 +1,24 @@
+services:
+  - type: worker
+    name: habit-bot
+    runtime: python
+    region: frankfurt
+    plan: starter
+    numInstances: 1
+    buildCommand: pip install -r requirements.txt && python -m unittest discover -s tests -v
+    startCommand: bash start.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.14
+      - key: BOT_TOKEN
+        sync: false
+      - key: DATA_FILE
+        value: /var/data/habit_bot/data.json
+      - key: RESET_WEBHOOK_ON_START
+        value: "true"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    disk:
+      name: habit-data
+      mountPath: /var/data
+      sizeGB: 1
