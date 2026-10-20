@@ -6,3 +6,8 @@ __pycache__/
 !.env.example
 .local/
 *.tmp
+node_modules/
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example

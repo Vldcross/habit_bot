@@ -1,0 +1,14 @@
+{
+  "name": "habit-bot-free",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.5" },
+  "scripts": {
+    "test": "node --test cloudflare/tests/*.test.mjs",
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run --outdir .local/worker-build",
+    "deploy:free": "node --use-env-proxy cloudflare/deploy.mjs"
+  },
+  "devDependencies": { "wrangler": "4.151.3" }
+}

@@ -1,0 +1,3 @@
+# Local wrangler dev only. Never commit real values.
+BOT_TOKEN=
+WEBHOOK_SECRET=

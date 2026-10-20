@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "habit-bot-free",
+  "main": "cloudflare/worker.mjs",
+  "compatibility_date": "2026-01-01",
+  "workers_dev": true,
+  "triggers": { "crons": ["* 18 * * *"] },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "habit-bot-free",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "cloudflare/migrations"
+    }
+  ]
+}
