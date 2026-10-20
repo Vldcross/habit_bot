@@ -64,7 +64,14 @@ async function deploy() {
   mkdirSync(resolve(root, ".local"), { recursive: true });
   const configFile = resolve(root, ".local/wrangler.deploy.json");
   writeFileSync(configFile, JSON.stringify(config, null, 2) + "\n");
-  wrangler(["d1", "execute", "DB", "--remote", "--yes", "--file", resolve(root, "cloudflare/migrations/0001_init.sql"), "--config", configFile]);
+  // The small idempotent schema can use D1's query API directly. Bulk imports
+  // require a separately hosted signed upload URL, which restricted networks
+  // may block even when api.cloudflare.com is allowed.
+  const schema = readFileSync(resolve(root, "cloudflare/migrations/0001_init.sql"), "utf8");
+  for (const sql of schema.split(";").map(value => value.trim()).filter(Boolean)) {
+    const results = await api(`d1/database/${databaseId}/query`, "POST", { sql });
+    if (results.some(result => result.success === false)) throw Error("Cloudflare не применил схему D1.");
+  }
   wrangler(["deploy", "--config", configFile]);
   const secret = randomBytes(32).toString("hex");
   // Only stdout contains deployment status. Secret values use stdin, never argv,
